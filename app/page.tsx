@@ -1,6 +1,4 @@
 "use client";
-
-import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, Lock, UserRound, X } from "lucide-react";
@@ -182,15 +180,10 @@ export default function LoginPage() {
             </div>
 
             <div className="relative flex flex-1 items-center justify-center py-8">
-              <div className="relative aspect-[4/5] w-full max-w-[460px] overflow-hidden rounded-[36px] border border-white/35 shadow-[0_25px_70px_rgba(94,67,0,0.22)]">
-                <Image
-                  src="/Sunflower.jpg"
-                  alt="Sunflower"
-                  fill
-                  className="object-cover"
-                  priority
-                />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
+              <div className="flex aspect-[4/5] w-full max-w-[460px] items-center justify-center rounded-[36px] border border-white/35 bg-[radial-gradient(circle_at_50%_35%,rgba(255,247,206,0.95)_0%,rgba(255,214,90,0.9)_38%,rgba(241,171,29,0.86)_100%)] shadow-[0_25px_70px_rgba(94,67,0,0.22)]">
+                <div className="flex h-44 w-44 items-center justify-center rounded-full bg-white/18 text-[120px] shadow-[0_18px_44px_rgba(94,67,0,0.18)] backdrop-blur-sm">
+                  <span aria-hidden="true">🌻</span>
+                </div>
               </div>
             </div>
           </section>

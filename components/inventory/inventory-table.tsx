@@ -66,10 +66,8 @@ export function InventoryTable({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [categoryFilter, setCategoryFilter] = useState("All Category");
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [activeMenuItem, setActiveMenuItem] = useState<InventoryItem | null>(null);
   const [currentRole, setCurrentRole] = useState<AppRole>("Owner");
-  const [currentUserName, setCurrentUserName] = useState("");
-  const [currentUsername, setCurrentUsername] = useState("");
   const [itemModalMode, setItemModalMode] = useState<"add" | "edit">("add");
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -94,8 +92,6 @@ export function InventoryTable({
     ])
       .then(([sessionData, inventoryData]) => {
         setCurrentRole(sessionData.user.role);
-        setCurrentUsername(sessionData.user.username);
-        setCurrentUserName(sessionData.user.name);
         setItems(inventoryData.items);
         onItemsChange?.(inventoryData.items);
       })
@@ -408,7 +404,7 @@ export function InventoryTable({
                             onClick={() => {
                               setStockModal({ type: "add", item });
                               setStockValue("");
-                              setActiveMenuId(null);
+                              setActiveMenuItem(null);
                             }}
                             className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
                           >
@@ -418,7 +414,7 @@ export function InventoryTable({
                             onClick={() => {
                               setStockModal({ type: "reduce", item });
                               setStockValue("");
-                              setActiveMenuId(null);
+                              setActiveMenuItem(null);
                             }}
                             className="rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-50"
                           >
@@ -427,37 +423,11 @@ export function InventoryTable({
                           {currentRole === "Owner" && (
                             <>
                               <button
-                                onClick={() => setActiveMenuId(activeMenuId === item.id ? null : item.id)}
+                                onClick={() => setActiveMenuItem(item)}
                                 className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                               >
                                 More
                               </button>
-
-                              {activeMenuId === item.id && (
-                                <>
-                                  <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />
-                                  <div className="absolute right-0 top-12 z-20 w-44 rounded-2xl border border-slate-200 bg-white py-1.5 shadow-lg">
-                                    <button
-                                      onClick={() => {
-                                        openEditItem(item);
-                                        setActiveMenuId(null);
-                                      }}
-                                      className="w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                    >
-                                      Edit Item
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setDeleteItem(item);
-                                        setActiveMenuId(null);
-                                      }}
-                                      className="w-full px-4 py-2 text-left text-sm text-rose-600 transition hover:bg-rose-50"
-                                    >
-                                      Delete Stock
-                                    </button>
-                                  </div>
-                                </>
-                              )}
                             </>
                           )}
                         </div>
@@ -689,6 +659,51 @@ export function InventoryTable({
                 className="rounded-xl bg-[#f6c33b] px-6 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-[#ebb019]"
               >
                 {stockModal.type === "add" ? "Add" : "Reduce"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeMenuItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xl font-semibold text-slate-900">Item Actions</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Pilih aksi untuk item <strong>{activeMenuItem.name}</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveMenuItem(null)}
+                className="rounded-xl border border-slate-200 p-2 text-slate-500"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  openEditItem(activeMenuItem);
+                  setActiveMenuItem(null);
+                }}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Edit Item
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteItem(activeMenuItem);
+                  setActiveMenuItem(null);
+                }}
+                className="w-full rounded-2xl border border-rose-200 px-4 py-3 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+              >
+                Delete Stock
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { dbExecute } from "@/lib/mysql";
+import type { RowDataPacket } from "mysql2/promise";
+import { dbExecute, dbQuery } from "@/lib/mysql";
 import {
   createActivityLog,
   getUserByUsername,
@@ -42,15 +43,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Data transaksi tidak lengkap." }, { status: 400 });
     }
 
+    const codeRows = await dbQuery<Array<RowDataPacket & { next_code: string }>>(
+      `SELECT CONCAT('T-', LPAD(COALESCE(MAX(financial_transaction_id), 0) + 1, 3, '0')) AS next_code
+       FROM financial_transactions`,
+    );
+
+    const nextCode = codeRows[0]?.next_code;
+    if (!nextCode) {
+      return NextResponse.json({ message: "Gagal membuat kode transaksi." }, { status: 500 });
+    }
+
     const result = await dbExecute(
       `INSERT INTO financial_transactions (
          transaction_code, user_id, notes, transaction_type, amount, transaction_date, created_by, updated_by
        )
-       VALUES (
-         CONCAT('T-', LPAD((SELECT IFNULL(MAX(financial_transaction_id), 0) + 1 FROM financial_transactions) , 3, '0')),
-         ?, ?, ?, ?, STR_TO_DATE(?, '%d/%m/%Y'), ?, ?
-       )`,
-      [targetUser.dbUserId, notes, status, amount, date, actor.dbUserId, actor.dbUserId],
+       VALUES (?, ?, ?, ?, ?, STR_TO_DATE(?, '%d/%m/%Y'), ?, ?)`,
+      [nextCode, targetUser.dbUserId, notes, status, amount, date, actor.dbUserId, actor.dbUserId],
     ) as { insertId: number };
 
     await createActivityLog({

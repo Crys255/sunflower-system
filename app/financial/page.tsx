@@ -15,6 +15,24 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+function formatAmountInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return new Intl.NumberFormat("id-ID").format(Number(digits)).replace(/,/g, ".");
+}
+
+function parseAmountInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+function formatDateForApi(value: string) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return "";
+  return `${day}/${month}/${year}`;
+}
+
 function parseDate(value: string) {
   const [day, month, year] = value.split("/").map(Number);
   return new Date(year, month - 1, day).getTime();
@@ -230,8 +248,8 @@ export default function FinancialPage() {
           targetUsername: currentUsername,
           notes: newTransaction.notes,
           status: newTransaction.status,
-          amount: Number(newTransaction.amount),
-          date: newTransaction.date,
+          amount: parseAmountInput(newTransaction.amount),
+          date: formatDateForApi(newTransaction.date),
         }),
       })
       .then((data) => {
@@ -553,8 +571,8 @@ export default function FinancialPage() {
                 <label className="mb-1.5 block text-sm text-slate-600">User</label>
                 <input
                   value={newTransaction.user}
-                  onChange={(e) => setNewTransaction((prev) => ({ ...prev, user: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none"
+                  readOnly
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-slate-700 outline-none"
                 />
               </div>
               <div>
@@ -578,22 +596,29 @@ export default function FinancialPage() {
                 <input
                   value={newTransaction.notes}
                   onChange={(e) => setNewTransaction((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Masukkan catatan transaksi"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none"
                 />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm text-slate-600">Amount</label>
                 <input
-                  type="number"
                   value={newTransaction.amount}
-                  onChange={(e) => setNewTransaction((prev) => ({ ...prev, amount: e.target.value }))}
+                  onChange={(e) =>
+                    setNewTransaction((prev) => ({
+                      ...prev,
+                      amount: formatAmountInput(e.target.value),
+                    }))
+                  }
+                  inputMode="numeric"
+                  placeholder="Contoh: 50.000"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none"
                 />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm text-slate-600">Date</label>
                 <input
-                  placeholder="DD/MM/YYYY"
+                  type="date"
                   value={newTransaction.date}
                   onChange={(e) => setNewTransaction((prev) => ({ ...prev, date: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none"
