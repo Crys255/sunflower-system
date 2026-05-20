@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { dbExecute, dbQuery } from "@/lib/mysql";
+import sql from "@/lib/db";
 import {
   createActivityLog,
   getUserByUsername,
@@ -43,23 +42,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Data transaksi tidak lengkap." }, { status: 400 });
     }
 
-    const codeRows = await dbQuery<Array<RowDataPacket & { next_code: string }>>(
-      `SELECT CONCAT('T-', LPAD(COALESCE(MAX(financial_transaction_id), 0) + 1, 3, '0')) AS next_code
-       FROM financial_transactions`,
-    );
+    const codeRows = await sql<{ next_code: string }[]>`
+      SELECT CONCAT('T-', LPAD(CAST(COALESCE(MAX(financial_transaction_id), 0) + 1 AS TEXT), 3, '0')) AS next_code
+      FROM financial_transactions
+    `;
 
     const nextCode = codeRows[0]?.next_code;
     if (!nextCode) {
       return NextResponse.json({ message: "Gagal membuat kode transaksi." }, { status: 500 });
     }
 
-    const result = await dbExecute(
-      `INSERT INTO financial_transactions (
-         transaction_code, user_id, notes, transaction_type, amount, transaction_date, created_by, updated_by
-       )
-       VALUES (?, ?, ?, ?, ?, STR_TO_DATE(?, '%d/%m/%Y'), ?, ?)`,
-      [nextCode, targetUser.dbUserId, notes, status, amount, date, actor.dbUserId, actor.dbUserId],
-    ) as { insertId: number };
+    const [txRow] = await sql<{ financial_transaction_id: number }[]>`
+      INSERT INTO financial_transactions (
+        transaction_code, user_id, notes, transaction_type, amount, transaction_date, created_by, updated_by
+      ) VALUES (
+        ${nextCode},
+        ${targetUser.dbUserId},
+        ${notes},
+        ${status},
+        ${amount},
+        TO_DATE(${date}, 'DD/MM/YYYY'),
+        ${actor.dbUserId},
+        ${actor.dbUserId}
+      )
+      RETURNING financial_transaction_id
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,
@@ -68,7 +75,7 @@ export async function POST(request: Request) {
       featureName: "FINANCIAL",
       activityMessage: `Menambahkan transaksi baru`,
       referenceTable: "financial_transactions",
-      referenceId: result.insertId,
+      referenceId: Number(txRow.financial_transaction_id),
     });
 
     return NextResponse.json({ transactions: await listFinancialTransactions() });

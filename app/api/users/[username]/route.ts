@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { dbExecute } from "@/lib/mysql";
+import sql from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import {
   createActivityLog,
@@ -8,7 +7,6 @@ import {
   listUsers,
   requireSessionUser,
 } from "@/lib/server-data";
-import { dbQuery } from "@/lib/mysql";
 
 export async function PATCH(
   request: Request,
@@ -33,29 +31,26 @@ export async function PATCH(
     const nextRoleCode = String(body.role ?? "Staff") === "Owner" ? "OWNER" : "STAFF";
 
     if (nextRoleCode === "OWNER" && targetUser.role !== "Owner") {
-      const ownerRows = await dbQuery<(RowDataPacket & { total_owner: number })[]>(
-        `SELECT COUNT(*) AS total_owner FROM app_users WHERE role_code = 'OWNER' AND deleted_at IS NULL`,
-      );
+      const ownerRows = await sql<{ total_owner: string }[]>`
+        SELECT COUNT(*)::TEXT AS total_owner FROM app_users WHERE role_code = 'OWNER' AND deleted_at IS NULL
+      `;
 
-      if ((ownerRows[0]?.total_owner ?? 0) > 0) {
+      if (Number(ownerRows[0]?.total_owner ?? 0) > 0) {
         return NextResponse.json({ message: "Hanya boleh ada satu akun owner." }, { status: 400 });
       }
     }
 
-    await dbExecute(
-      `UPDATE app_users
-       SET full_name = ?, username = ?, email = ?, phone_number = ?, password_hash = ?, role_code = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ?`,
-      [
-        String(body.name ?? ""),
-        String(body.username ?? ""),
-        String(body.email ?? ""),
-        String(body.phone ?? ""),
-        nextPasswordHash,
-        nextRoleCode,
-        targetUser.dbUserId,
-      ],
-    );
+    await sql`
+      UPDATE app_users
+      SET
+        full_name = ${String(body.name ?? "")},
+        username = ${String(body.username ?? "")},
+        email = ${String(body.email ?? "")},
+        phone_number = ${String(body.phone ?? "")},
+        password_hash = ${nextPasswordHash},
+        role_code = ${nextRoleCode}
+      WHERE user_id = ${targetUser.dbUserId}
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,
@@ -97,10 +92,11 @@ export async function DELETE(
       return NextResponse.json({ message: "Akun owner tidak dapat dihapus." }, { status: 400 });
     }
 
-    await dbExecute(
-      `UPDATE app_users SET deleted_at = NOW(), is_active = 0 WHERE user_id = ?`,
-      [targetUser.dbUserId],
-    );
+    await sql`
+      UPDATE app_users
+      SET deleted_at = NOW(), is_active = false
+      WHERE user_id = ${targetUser.dbUserId}
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,

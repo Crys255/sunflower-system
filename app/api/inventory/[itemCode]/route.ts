@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { dbExecute, dbQuery } from "@/lib/mysql";
+import sql from "@/lib/db";
 import {
   createActivityLog,
   ensureInventoryCategory,
@@ -41,30 +40,40 @@ export async function PATCH(
     const categoryId = await ensureInventoryCategory(category);
     const unitId = await ensureInventoryUnit(unit);
 
-    const existingRows = await dbQuery<(RowDataPacket & { inventory_item_id: number })[]>(
-      `SELECT inventory_item_id FROM inventory_items WHERE item_code = ? AND deleted_at IS NULL LIMIT 1`,
-      [itemCode],
-    );
+    const existingRows = await sql<{ inventory_item_id: number }[]>`
+      SELECT inventory_item_id FROM inventory_items
+      WHERE item_code = ${itemCode} AND deleted_at IS NULL
+      LIMIT 1
+    `;
 
     if (existingRows.length === 0) {
       return NextResponse.json({ message: "Item tidak ditemukan." }, { status: 404 });
     }
 
-    const inventoryItemId = existingRows[0].inventory_item_id;
+    const inventoryItemId = Number(existingRows[0].inventory_item_id);
 
-    await dbExecute(
-      `UPDATE inventory_items
-       SET item_name = ?, inventory_category_id = ?, inventory_unit_id = ?, quantity = ?, minimum_stock = ?, ideal_stock = ?, stock_status = ?, updated_by = ?, last_stock_update_at = NOW()
-       WHERE inventory_item_id = ?`,
-      [name, categoryId, unitId, qty, lowStock, idealStock, resolveDbStockStatus(qty, lowStock, idealStock), actor.dbUserId, inventoryItemId],
-    );
+    await sql`
+      UPDATE inventory_items
+      SET
+        item_name = ${name},
+        inventory_category_id = ${categoryId},
+        inventory_unit_id = ${unitId},
+        quantity = ${qty},
+        minimum_stock = ${lowStock},
+        ideal_stock = ${idealStock},
+        stock_status = ${resolveDbStockStatus(qty, lowStock, idealStock)},
+        updated_by = ${actor.dbUserId},
+        last_stock_update_at = NOW()
+      WHERE inventory_item_id = ${inventoryItemId}
+    `;
 
-    await dbExecute(
-      `INSERT INTO inventory_stock_movements (
-         inventory_item_id, movement_type, quantity_after, remarks, acted_by
-       ) VALUES (?, 'EDIT_ITEM', ?, ?, ?)`,
-      [inventoryItemId, qty, `Edit item ${name}`, actor.dbUserId],
-    );
+    await sql`
+      INSERT INTO inventory_stock_movements (
+        inventory_item_id, movement_type, quantity_after, remarks, acted_by
+      ) VALUES (
+        ${inventoryItemId}, 'EDIT_ITEM', ${qty}, ${`Edit item ${name}`}, ${actor.dbUserId}
+      )
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,
@@ -97,31 +106,33 @@ export async function DELETE(
       return NextResponse.json({ message: "Hanya owner yang dapat menghapus item." }, { status: 403 });
     }
 
-    const rows = await dbQuery<(RowDataPacket & { inventory_item_id: number; item_name: string })[]>(
-      `SELECT inventory_item_id, item_name
-       FROM inventory_items
-       WHERE item_code = ? AND deleted_at IS NULL
-       LIMIT 1`,
-      [itemCode],
-    );
+    const rows = await sql<{ inventory_item_id: number; item_name: string }[]>`
+      SELECT inventory_item_id, item_name
+      FROM inventory_items
+      WHERE item_code = ${itemCode} AND deleted_at IS NULL
+      LIMIT 1
+    `;
 
     if (rows.length === 0) {
       return NextResponse.json({ message: "Item tidak ditemukan." }, { status: 404 });
     }
 
     const row = rows[0];
+    const itemId = Number(row.inventory_item_id);
 
-    await dbExecute(
-      `UPDATE inventory_items SET deleted_at = NOW(), updated_by = ? WHERE inventory_item_id = ?`,
-      [actor.dbUserId, row.inventory_item_id],
-    );
+    await sql`
+      UPDATE inventory_items
+      SET deleted_at = NOW(), updated_by = ${actor.dbUserId}
+      WHERE inventory_item_id = ${itemId}
+    `;
 
-    await dbExecute(
-      `INSERT INTO inventory_stock_movements (
-         inventory_item_id, movement_type, remarks, acted_by
-       ) VALUES (?, 'DELETE_ITEM', ?, ?)`,
-      [row.inventory_item_id, `Delete item ${row.item_name}`, actor.dbUserId],
-    );
+    await sql`
+      INSERT INTO inventory_stock_movements (
+        inventory_item_id, movement_type, remarks, acted_by
+      ) VALUES (
+        ${itemId}, 'DELETE_ITEM', ${`Delete item ${row.item_name}`}, ${actor.dbUserId}
+      )
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,
@@ -130,7 +141,7 @@ export async function DELETE(
       featureName: "INVENTORY",
       activityMessage: `Menghapus item stock ${row.item_name}`,
       referenceTable: "inventory_items",
-      referenceId: row.inventory_item_id,
+      referenceId: itemId,
     });
 
     return NextResponse.json({ items: await listInventoryItems() });

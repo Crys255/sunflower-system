@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2/promise";
-import { dbExecute } from "@/lib/mysql";
+import sql from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import {
   createActivityLog,
   listUsers,
   requireSessionUser,
 } from "@/lib/server-data";
-import { dbQuery } from "@/lib/mysql";
 
 export async function GET() {
   try {
@@ -64,30 +62,31 @@ export async function POST(request: Request) {
     }
 
     if (roleCode === "OWNER") {
-      const ownerRows = await dbQuery<(RowDataPacket & { total_owner: number })[]>(
-        `SELECT COUNT(*) AS total_owner FROM app_users WHERE role_code = 'OWNER' AND deleted_at IS NULL`,
-      );
+      const ownerRows = await sql<{ total_owner: string }[]>`
+        SELECT COUNT(*)::TEXT AS total_owner FROM app_users WHERE role_code = 'OWNER' AND deleted_at IS NULL
+      `;
 
-      if ((ownerRows[0]?.total_owner ?? 0) > 0) {
+      if (Number(ownerRows[0]?.total_owner ?? 0) > 0) {
         return NextResponse.json({ message: "Hanya boleh ada satu akun owner." }, { status: 400 });
       }
     }
 
     const passwordHash = await hashPassword(password);
 
-    const result = await dbExecute(
-      `INSERT INTO app_users (
-         full_name, username, email, phone_number, password_hash, role_code, is_active
-       ) VALUES (?, ?, ?, ?, ?, ?, 1)`,
-      [
-        String(body.name ?? ""),
-        String(body.username ?? ""),
-        String(body.email ?? ""),
-        String(body.phone ?? ""),
-        passwordHash,
-        roleCode,
-      ],
-    ) as { insertId: number };
+    const [userRow] = await sql<{ user_id: number }[]>`
+      INSERT INTO app_users (
+        full_name, username, email, phone_number, password_hash, role_code, is_active
+      ) VALUES (
+        ${String(body.name ?? "")},
+        ${String(body.username ?? "")},
+        ${String(body.email ?? "")},
+        ${String(body.phone ?? "")},
+        ${passwordHash},
+        ${roleCode},
+        true
+      )
+      RETURNING user_id
+    `;
 
     await createActivityLog({
       actorUserId: actor.dbUserId,
@@ -96,7 +95,7 @@ export async function POST(request: Request) {
       featureName: "USER",
       activityMessage: `Menambahkan akun ${String(body.name ?? "")}`,
       referenceTable: "app_users",
-      referenceId: result.insertId,
+      referenceId: Number(userRow.user_id),
     });
 
     return NextResponse.json({ users: await listUsers() });
