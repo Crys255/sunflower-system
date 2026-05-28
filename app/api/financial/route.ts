@@ -9,7 +9,14 @@ import {
 
 export async function GET() {
   try {
-    const transactions = await listFinancialTransactions();
+    const actor = await requireSessionUser();
+    if (!actor) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const transactions = await listFinancialTransactions(
+      actor.role === "Staff" ? actor.dbUserId : undefined,
+    );
     return NextResponse.json({ transactions });
   } catch (error) {
     return NextResponse.json(
@@ -24,11 +31,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const actor = await requireSessionUser();
 
-    if (!actor || actor.role !== "Owner") {
-      return NextResponse.json({ message: "Hanya owner yang dapat menambah transaksi." }, { status: 403 });
+    if (!actor) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const targetUser = await getUserByUsername(String(body.targetUsername ?? actor.username));
+    const targetUser =
+      actor.role === "Owner"
+        ? await getUserByUsername(String(body.targetUsername ?? actor.username))
+        : actor;
+
     if (!targetUser) {
       return NextResponse.json({ message: "User transaksi tidak ditemukan." }, { status: 404 });
     }
@@ -78,7 +89,10 @@ export async function POST(request: Request) {
       referenceId: Number(txRow.financial_transaction_id),
     });
 
-    return NextResponse.json({ transactions: await listFinancialTransactions() });
+    const transactions = await listFinancialTransactions(
+      actor.role === "Staff" ? actor.dbUserId : undefined,
+    );
+    return NextResponse.json({ transactions });
   } catch (error) {
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Gagal menambah transaksi." },

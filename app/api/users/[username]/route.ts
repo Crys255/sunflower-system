@@ -64,6 +64,16 @@ export async function PATCH(
 
     return NextResponse.json({ users: await listUsers() });
   } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("username")) {
+        return NextResponse.json({ message: "Username sudah digunakan." }, { status: 400 });
+      }
+      if (message.includes("email")) {
+        return NextResponse.json({ message: "Email sudah digunakan." }, { status: 400 });
+      }
+      return NextResponse.json({ message: "Data sudah digunakan akun lain." }, { status: 400 });
+    }
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "Gagal mengubah user." },
       { status: 500 },

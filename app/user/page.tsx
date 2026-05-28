@@ -10,7 +10,7 @@ import { fetchJson } from "@/lib/api-client";
 export default function UserPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [mode, setMode] = useState<"add" | "edit">("add");
+  const [mode, setMode] = useState<"add" | "edit" | "self-edit">("add");
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [currentRole, setCurrentRole] = useState<AppRole>("Owner");
   const [currentUsername, setCurrentUsername] = useState("");
@@ -52,6 +52,12 @@ export default function UserPage() {
     setIsOpen(true);
   };
 
+  const handleSelfEdit = () => {
+    setMode("self-edit");
+    setSelectedUser(currentUser ?? null);
+    setIsOpen(true);
+  };
+
   const handleDeleteUser = (user: AppUser) => {
     fetchJson<{ users: AppUser[] }>(`/api/users/${encodeURIComponent(user.username)}`, { method: "DELETE" })
       .then((data) => setUsers(data.users))
@@ -66,7 +72,7 @@ export default function UserPage() {
       description={
         currentRole === "Owner"
           ? "Kelola akun owner dan staff, lalu buka detail profil langsung dari tabel user."
-          : "Halaman ini dibatasi untuk owner. Staff mengakses profil melalui dashboard dan session aktif."
+          : "Lihat dan ubah data profil Anda."
       }
       actionButton={
         currentRole === "Owner" ? (
@@ -104,11 +110,14 @@ export default function UserPage() {
             ? previewUser.username === currentUser.username
               ? "Owner dapat mengganti data pribadi dan melihat profil akun lain dari tabel."
               : "Detail akun staff yang dipilih dari tabel user."
-            : "Anda hanya dapat melihat data akun sendiri."
+            : "Lihat dan ubah data profil Anda."
         }
         user={previewUser}
-        showChangeButton={currentRole === "Owner" && previewUser.username === currentUser.username}
-        onChange={() => handleEdit(currentUser)}
+        showChangeButton={
+          currentRole === "Staff" ||
+          (currentRole === "Owner" && previewUser.username === currentUser.username)
+        }
+        onChange={currentRole === "Staff" ? handleSelfEdit : () => handleEdit(currentUser)}
       />
 
       {currentRole === "Owner" ? (
@@ -156,16 +165,14 @@ export default function UserPage() {
         />
       ) : null}
 
-      {currentRole === "Owner" && (
-        <UserFormModal
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          mode={mode}
-          user={selectedUser}
-          users={users}
-          setUsers={setUsers}
-        />
-      )}
+      <UserFormModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        mode={mode}
+        user={selectedUser}
+        users={users}
+        setUsers={setUsers}
+      />
     </PageContainer>
   );
 }
@@ -180,7 +187,7 @@ function UserFormModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  mode: "add" | "edit";
+  mode: "add" | "edit" | "self-edit";
   user: AppUser | null;
   users: AppUser[];
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
@@ -197,7 +204,7 @@ function UserFormModal({
   const ownerCount = users.filter((entry) => entry.role === "Owner").length;
 
   useEffect(() => {
-    if (mode === "edit" && user) {
+    if ((mode === "edit" || mode === "self-edit") && user) {
       setForm({
         name: user.name,
         username: user.username,
@@ -225,14 +232,26 @@ function UserFormModal({
   };
 
   const handleSubmit = () => {
+    if (mode === "self-edit") {
+      if (!form.name || !form.email) return;
+      fetchJson<{ user: AppUser }>("/api/users/me", {
+        method: "PATCH",
+        body: JSON.stringify({ name: form.name, email: form.email, phone: form.phone, password: form.password }),
+      })
+        .then((data) => {
+          setUsers((prev) => prev.map((u) => u.username === data.user.username ? data.user : u));
+          onClose();
+        })
+        .catch((error) => alert(error instanceof Error ? error.message : "Gagal mengubah profil."));
+      return;
+    }
+
     if (!form.name || !form.username || !form.email || !form.phone) return;
 
     if (mode === "add") {
       fetchJson<{ users: AppUser[] }>("/api/users", {
         method: "POST",
-        body: JSON.stringify({
-          ...form,
-        }),
+        body: JSON.stringify({ ...form }),
       })
         .then((data) => {
           setUsers(data.users);
@@ -242,9 +261,7 @@ function UserFormModal({
     } else if (user) {
       fetchJson<{ users: AppUser[] }>(`/api/users/${encodeURIComponent(user.username)}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          ...form,
-        }),
+        body: JSON.stringify({ ...form }),
       })
         .then((data) => {
           setUsers(data.users);
@@ -258,7 +275,9 @@ function UserFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-2xl rounded-[28px] bg-white p-6 shadow-xl">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{mode === "add" ? "Add User" : "Edit User"}</h2>
+          <h2 className="text-xl font-semibold">
+            {mode === "add" ? "Add User" : mode === "self-edit" ? "Edit Profile" : "Edit User"}
+          </h2>
           <button onClick={onClose}>
             <X className="text-gray-400 hover:text-black" />
           </button>
@@ -266,26 +285,33 @@ function UserFormModal({
 
         <div className="grid gap-4 text-sm md:grid-cols-2">
           <Input label="Full Name" value={form.name} onChange={(value) => handleChange("name", value)} />
-          <Input label="Username" value={form.username} onChange={(value) => handleChange("username", value)} />
+          <Input
+            label="Username"
+            value={form.username}
+            onChange={(value) => handleChange("username", value)}
+            readOnly={mode === "self-edit"}
+          />
           <Input label="Email" value={form.email} onChange={(value) => handleChange("email", value)} />
           <Input label="Phone" value={form.phone} onChange={(value) => handleChange("phone", value)} />
           <Input
-            label={mode === "add" ? "Password" : "New Password"}
+            label={mode === "add" ? "Password" : "New Password (opsional)"}
             value={form.password}
             onChange={(value) => handleChange("password", value)}
             type="password"
           />
-          <div>
-            <label className="text-gray-500 text-xs">Role</label>
-            <select
-              value={form.role}
-              onChange={(e) => handleChange("role", e.target.value as AppRole)}
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-            >
-              <option value="Staff">Staff</option>
-              {(mode === "edit" && user?.role === "Owner") || ownerCount === 0 ? <option value="Owner">Owner</option> : null}
-            </select>
-          </div>
+          {mode !== "self-edit" && (
+            <div>
+              <label className="text-gray-500 text-xs">Role</label>
+              <select
+                value={form.role}
+                onChange={(e) => handleChange("role", e.target.value as AppRole)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="Staff">Staff</option>
+                {(mode === "edit" && user?.role === "Owner") || ownerCount === 0 ? <option value="Owner">Owner</option> : null}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-3">
@@ -422,11 +448,13 @@ function Input({
   value,
   onChange,
   type = "text",
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  readOnly?: boolean;
 }) {
   return (
     <div>
@@ -435,7 +463,8 @@ function Input({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border px-3 py-2"
+        readOnly={readOnly}
+        className={`mt-1 w-full rounded-lg border px-3 py-2 ${readOnly ? "bg-slate-100 text-slate-500" : ""}`}
       />
     </div>
   );

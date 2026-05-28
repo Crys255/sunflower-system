@@ -29,7 +29,7 @@ export function Navbar() {
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Owner", "Staff"] },
         { href: "/inventory", label: "Inventory", icon: Package, roles: ["Owner", "Staff"] },
         { href: "/financial", label: "Financial", icon: DollarSign, roles: ["Owner", "Staff"] },
-        { href: "/user", label: "User", icon: User, roles: ["Owner"] },
+        { href: "/user", label: "User", icon: User, roles: ["Owner", "Staff"] },
       ].filter((item) => item.roles.includes(currentRole)),
     [currentRole],
   );

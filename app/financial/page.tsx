@@ -68,7 +68,6 @@ export default function FinancialPage() {
   const [cashflowTimeline, setCashflowTimeline] = useState<"day" | "week" | "month">("month");
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [currentUsername, setCurrentUsername] = useState("");
-  const [currentUserName, setCurrentUserName] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newTransaction, setNewTransaction] = useState({
     user: "",
@@ -86,7 +85,6 @@ export default function FinancialPage() {
       .then(([userData, transactionData]) => {
         setCurrentRole(userData.user.role);
         setCurrentUsername(userData.user.username);
-        setCurrentUserName(userData.user.name);
         setTransactions(transactionData.transactions);
         setNewTransaction((prev) => ({
           ...prev,
@@ -98,21 +96,10 @@ export default function FinancialPage() {
       });
   }, []);
 
-  const visibleTransactions = useMemo(() => {
-    const base =
-      currentRole === "Owner"
-        ? transactions
-        : transactions.filter((item) => item.user === currentUserName);
-
-    return currentRole === "Owner"
-      ? base
-      : [...base].sort((a, b) => parseDate(b.date) - parseDate(a.date)).slice(0, 10);
-  }, [currentRole, currentUserName, transactions]);
-
   const filteredTransactions = useMemo(() => {
     const keyword = search.toLowerCase();
 
-    return visibleTransactions.filter((item) => {
+    return transactions.filter((item) => {
       const matchesSearch =
         item.id.toLowerCase().includes(keyword) ||
         item.user.toLowerCase().includes(keyword) ||
@@ -121,7 +108,7 @@ export default function FinancialPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [search, statusFilter, visibleTransactions]);
+  }, [search, statusFilter, transactions]);
 
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
@@ -272,18 +259,16 @@ export default function FinancialPage() {
       description={
         currentRole === "Owner"
           ? "Kelola arus kas, transaksi pemasukan-pengeluaran, dan laporan keuangan UMKM secara lebih terstruktur."
-          : "Lihat 10 histori transaksi terakhir milik Anda tanpa membuka ringkasan finansial sensitif."
+          : "Tambah dan lihat riwayat transaksi finansial milik Anda."
       }
       actionButton={
-        currentRole === "Owner" ? (
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            className="rounded-2xl bg-[#f6c33b] px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-[#ebb019]"
-          >
-            + Add Transaction
-          </button>
-        ) : undefined
+        <button
+          type="button"
+          onClick={() => setIsAddOpen(true)}
+          className="rounded-2xl bg-[#f6c33b] px-4 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-[#ebb019]"
+        >
+          + Add Transaction
+        </button>
       }
     >
       {currentRole === "Owner" && (
@@ -388,7 +373,7 @@ export default function FinancialPage() {
               <p className="text-sm text-slate-500">
                 {currentRole === "Owner"
                   ? "Filter, cari, dan kelola transaksi sesuai hak akses owner."
-                  : "10 histori transaksi terakhir milik Anda."}
+                  : "Riwayat transaksi finansial milik Anda."}
               </p>
             </div>
           </div>

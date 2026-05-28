@@ -239,7 +239,7 @@ export async function listInventoryItems() {
   }));
 }
 
-export async function listFinancialTransactions() {
+export async function listFinancialTransactions(filterUserId?: number) {
   const rows = await sql<FinancialRow[]>`
     SELECT
       ft.transaction_code,
@@ -258,6 +258,7 @@ export async function listFinancialTransactions() {
     FROM financial_transactions ft
     INNER JOIN app_users au ON au.user_id = ft.user_id
     WHERE ft.deleted_at IS NULL
+    ${filterUserId !== undefined ? sql`AND ft.user_id = ${filterUserId}` : sql``}
     ORDER BY ft.transaction_date DESC, ft.financial_transaction_id DESC
   `;
 
